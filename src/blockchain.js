@@ -36,7 +36,7 @@ class Blockchain {
     if (this.chain.length === 0) {
       let block = new BlockClass.Block({ data: "Genesis Block" })
       await this._addBlock(block)
-      console.log(`first block added ${block}` );
+      console.log(`first block added ${block}`)
     }
   }
 
@@ -45,7 +45,7 @@ class Blockchain {
    */
   getChainHeight() {
     return new Promise((resolve, reject) => {
-      resolve(this.chain.length-1)
+      resolve(this.chain.length - 1)
     })
   }
 
@@ -70,8 +70,15 @@ class Blockchain {
         block.previousBlockHash = self.chain[self.chain.length - 1].hash
       }
       block.hash = SHA256(JSON.stringify(block)).toString()
-      this.chain.push(block)
-      resolve(block)
+      //   if (!self.validateChain()) reject("Invalid chain")
+      self.validateChain().then((errors) => {
+        if (errors) {
+          reject("Invalid chain")
+        } else {
+          self.chain.push(block)
+          resolve(block)
+        }
+      })
     })
   }
 
@@ -85,8 +92,11 @@ class Blockchain {
    */
   requestMessageOwnershipVerification(address) {
     return new Promise((resolve) => {
-        const response = `${address}:${new Date().getTime().toString().slice(0, -3)}:starRegistry`
-        resolve(response)
+      const response = `${address}:${new Date()
+        .getTime()
+        .toString()
+        .slice(0, -3)}:starRegistry`
+      resolve(response)
     })
   }
 
@@ -110,23 +120,25 @@ class Blockchain {
   submitStar(address, message, signature, star) {
     let self = this
     return new Promise(async (resolve, reject) => {
-        const time = parseInt(message.split(':')[1])
-        const currentTime = parseInt(new Date().getTime().toString().slice(0, -3))
-        // Check if the time elapsed is less than 5 minutes
-        if (currentTime - time < 300) {
-            // Verify the message with wallet address and signature
-            if (bitcoinMessage.verify(message, address, signature)) {
-                let newBlock = new BlockClass.Block({
-                    address: address,
-                    star: star
-                })
-                await self._addBlock(newBlock)
-                resolve(newBlock)
-            } else {
-                reject("Invalid message")
-            }
+      const time = parseInt(message.split(":")[1])
+      const currentTime = parseInt(new Date().getTime().toString().slice(0, -3))
+      // Check if the time elapsed is less than 5 minutes
+      if (currentTime - time < 300) {
+        // Verify the message with wallet address and signature
+        if (bitcoinMessage.verify(message, address, signature)) {
+          let newBlock = new BlockClass.Block({
+            address: address,
+            star: star,
+          })
+          await self._addBlock(newBlock).catch((err) => {
+            reject(err)
+            })
+          resolve(newBlock)
+        } else {
+          reject("Invalid message")
         }
-        reject("Time elapsed is greater than 5 minutes")
+      }
+      reject("Time elapsed is greater than 5 minutes")
     })
   }
 
@@ -139,11 +151,11 @@ class Blockchain {
   getBlockByHash(hash) {
     let self = this
     return new Promise((resolve, reject) => {
-        const foundBlock = self.chain.filter(block => block.hash === hash)
-        if (foundBlock.length > 0) {
-            resolve(foundBlock[0])
-        }
-        reject("Block not found")
+      const foundBlock = self.chain.filter((block) => block.hash === hash)
+      if (foundBlock.length > 0) {
+        resolve(foundBlock[0])
+      }
+      reject("Block not found")
     })
   }
 
@@ -173,12 +185,14 @@ class Blockchain {
   getStarsByWalletAddress(address) {
     let self = this
     return new Promise((resolve, reject) => {
-        // const stars = self.chain.map(block => block.getBData()).filter(block => block.data.address === address)
-        const stars = self.chain.map(block => block.getBData()).filter(block => block.address === address)
-        if(stars){
+      // const stars = self.chain.map(block => block.getBData()).filter(block => block.data.address === address)
+      const stars = self.chain
+        .map((block) => block.getBData())
+        .filter((block) => block.address === address)
+      if (stars) {
         resolve(stars)
-    }
-    reject("No stars found")
+      }
+      reject("No stars found")
     })
   }
 
@@ -191,19 +205,24 @@ class Blockchain {
   validateChain() {
     let self = this
     let errorLog = []
+    let lastHash
     return new Promise(async (resolve, reject) => {
-        for (let i = 0; i < self.chain.length; i++) {
-            const block = self.chain[i]
-            const error = await self.validateBlock(block, i)
-            if (error) {
-            errorLog.push(error)
-            }
+      for (let i = 0; i < self.chain.length; i++) {
+        const block = self.chain[i]
+        if (lastHash && block.previousBlockHash !== lastHash) {
+          errorLog.push(`Invalid previous block hash at block ${i}`)
         }
-        if (errorLog.length > 0) {
-            reject(errorLog)
-        } else {
-            resolve()
+        lastHash = block.hash
+        const success = await block.validate()
+        if (!success) {
+          errorLog.push("Validation failed at block " + i)
         }
+      }
+      if (errorLog.length > 0) {
+        resolve(errorLog)
+      } else {
+        resolve()
+      }
     })
   }
 }
