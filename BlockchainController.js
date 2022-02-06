@@ -1,7 +1,7 @@
 /**
  *          BlockchainController
- * 
- * This class expose the endpoints that the client applications will use to interact with the 
+ *
+ * This class expose the endpoints that the client applications will use to interact with the
  * Blockchain dataset
  */
 class BlockchainController {
@@ -16,6 +16,42 @@ class BlockchainController {
     this.getBlockByHash()
     this.getStarsByOwner()
     this.validateChain()
+    this.tamperWithChain()
+    this.tamperWithBlock()
+  }
+
+  tamperWithChain() {
+    this.app.post("/tamperWithChain/:height", async (req, res) => {
+      if (req.params.height) {
+        const height = parseInt(req.params.height)
+        let block = await this.blockchain.getBlockByHeight(height)
+        if (block) {
+          block.previousBlockHash = 123456
+          res.send(block)
+        } else {
+          res.send("Block not found")
+        }
+      } else {
+        res.send("Invalid height")
+      }
+    })
+  }
+
+  tamperWithBlock() {
+    this.app.post("/tamperWithBlock/:height", async (req, res) => {
+      if (req.params.height) {
+        const height = parseInt(req.params.height)
+        let block = await this.blockchain.getBlockByHeight(height)
+        if (block) {
+          block.time = 3
+          res.send(block)
+        } else {
+          res.send("Block not found")
+        }
+      } else {
+        res.send("Invalid height")
+      }
+    })
   }
 
   // Enpoint to Get a Block by Height (GET Endpoint)
@@ -132,4 +168,6 @@ class BlockchainController {
   }
 }
 
-module.exports = (app, blockchainObj) => { return new BlockchainController(app, blockchainObj);}
+module.exports = (app, blockchainObj) => {
+  return new BlockchainController(app, blockchainObj)
+}
